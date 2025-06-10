@@ -49,10 +49,16 @@ def estrai_messaggi(file_path):
             messaggi.append(contenuto.strip())
     return " ".join(messaggi)
 
-def lzw_compress(text):
-    # Dizionario iniziale: tutti i singoli caratteri ASCII
+def lzw_compress(text, initial_dict=None):
+    """Compress text using LZW. If initial_dict is provided it will be used
+    as the starting dictionary."""
     dict_size = 256
-    dictionary = {chr(i): i for i in range(dict_size)}
+    if initial_dict is not None:
+        dictionary = dict(initial_dict)
+        if dictionary:
+            dict_size = max(dictionary.values()) + 1
+    else:
+        dictionary = {chr(i): i for i in range(dict_size)}
     
     w = ""
     compressed = []
@@ -74,16 +80,13 @@ def lzw_compress(text):
     reverse_dict = {v: k for k, v in dictionary.items()}
     return compressed, reverse_dict
 
-# === Uso con i tuoi file ===
-alice_txt = "alice.txt"
-bob_txt = "bob.txt"
-
-# Sincronizza le chat e produce un file con i messaggi ordinati
-merged_file = sync_chats([alice_txt, bob_txt])
-
-merged_str = estrai_messaggi(merged_file)
-
-compressed_merged, dict_merged = lzw_compress(merged_str)
+def build_merged_dictionary(alice_txt="alice.txt", bob_txt="bob.txt"):
+    """Return dictionaries obtained from the merged chat of alice and bob."""
+    merged_file = sync_chats([alice_txt, bob_txt])
+    merged_str = estrai_messaggi(merged_file)
+    _, rev_dict = lzw_compress(merged_str)
+    fwd_dict = {v: k for k, v in rev_dict.items()}
+    return rev_dict, fwd_dict, merged_file
 
 def lzw_decompress(compressed, initial_dict=None):
     # Dizionario iniziale: tutti i singoli caratteri ASCII
@@ -114,24 +117,32 @@ def lzw_decompress(compressed, initial_dict=None):
 
 
 
-originale = estrai_messaggi(merged_file)
-compressed, _ = lzw_compress(originale)
-decompressed = lzw_decompress(compressed)
+def main():
+    alice_txt = "alice.txt"
+    bob_txt = "bob.txt"
 
-if originale == decompressed:
-    print("Compressione OK: decompressione corretta.")
-else:
-    print("Errore: il testo ricostruito è diverso da quello originale.")
+    rev_dict, _, merged_file = build_merged_dictionary(alice_txt, bob_txt)
 
-def normalizza(s):
-    return " ".join(s.split())
+    originale = estrai_messaggi(merged_file)
+    compressed, _ = lzw_compress(originale)
+    decompressed = lzw_decompress(compressed)
 
-if normalizza(originale) == normalizza(decompressed):
-    print("Compressione OK (con normalizzazione).")
-else:
-    print("Differenze trovate anche dopo la normalizzazione.")
+    if originale == decompressed:
+        print("Compressione OK: decompressione corretta.")
+    else:
+        print("Errore: il testo ricostruito è diverso da quello originale.")
 
-print("Dizionario conversazione (ultimi 10):", list(dict_merged.items())[-10:])
+    def normalizza(s):
+        return " ".join(s.split())
 
+    if normalizza(originale) == normalizza(decompressed):
+        print("Compressione OK (con normalizzazione).")
+    else:
+        print("Differenze trovate anche dopo la normalizzazione.")
 
-print("Numero voci dizionario conversazione:", len(dict_merged))
+    print("Dizionario conversazione (ultimi 10):", list(rev_dict.items())[-10:])
+
+    print("Numero voci dizionario conversazione:", len(rev_dict))
+
+if __name__ == "__main__":
+    main()
