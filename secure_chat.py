@@ -48,8 +48,10 @@ def decrypt_message(encrypted_tokens, base_dict_rev: dict, key: str):
 
 if __name__ == "__main__":
     rev_dict, fwd_dict, _ = build_merged_dictionary()
-    secret_key = "K"
-    msg = "Nuovo messaggio di prova"
+
+    secret_key = input("Inserisci la chiave segreta: ")
+    msg = input("Inserisci il nuovo messaggio da cifrare: ")
+
     encrypted = encrypt_message(msg, fwd_dict, secret_key)
     print("Token cifrati:", encrypted)
     decrypted = decrypt_message(encrypted, rev_dict, secret_key)
