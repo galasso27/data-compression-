@@ -1,4 +1,43 @@
 import re
+from datetime import datetime
+
+TIMESTAMP_RE = re.compile(r"^(\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}) ([^:]+): (.*)")
+
+def parse_chat(file_path):
+    """Parses a chat log returning a list of (datetime, full_line) tuples."""
+    messages = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        current = None
+        for line in f:
+            line = line.rstrip("\n")
+            m = TIMESTAMP_RE.match(line)
+            if m:
+                if current:
+                    messages.append(current)
+                ts_str, speaker, text = m.groups()
+                ts = datetime.strptime(ts_str, "%d/%m/%Y %H:%M:%S")
+                current = [ts, f"{ts_str} {speaker}: {text}"]
+            else:
+                if current:
+                    current[1] += " " + line.strip()
+        if current:
+            messages.append(current)
+    return messages
+
+def sync_chats(files, output_path="merged_chat.txt"):
+    """Merge chats based on timestamp and write ordered messages to a file."""
+    all_msgs = []
+    for path in files:
+        all_msgs.extend(parse_chat(path))
+    all_msgs.sort(key=lambda x: x[0])
+
+    seen = set()
+    with open(output_path, "w", encoding="utf-8") as out:
+        for _, line in all_msgs:
+            if line not in seen:
+                out.write(line + "\n")
+                seen.add(line)
+    return output_path
 
 def estrai_messaggi(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -39,11 +78,12 @@ def lzw_compress(text):
 alice_txt = "alice.txt"
 bob_txt = "bob.txt"
 
-alice_str = estrai_messaggi(alice_txt)
-bob_str = estrai_messaggi(bob_txt)
+# Sincronizza le chat e produce un file con i messaggi ordinati
+merged_file = sync_chats([alice_txt, bob_txt])
 
-compressed_alice, dict_alice = lzw_compress(alice_str)
-compressed_bob, dict_bob = lzw_compress(bob_str)
+merged_str = estrai_messaggi(merged_file)
+
+compressed_merged, dict_merged = lzw_compress(merged_str)
 
 def lzw_decompress(compressed, initial_dict=None):
     # Dizionario iniziale: tutti i singoli caratteri ASCII
@@ -74,7 +114,7 @@ def lzw_decompress(compressed, initial_dict=None):
 
 
 
-originale = estrai_messaggi("bob.txt")
+originale = estrai_messaggi(merged_file)
 compressed, _ = lzw_compress(originale)
 decompressed = lzw_decompress(compressed)
 
@@ -91,9 +131,7 @@ if normalizza(originale) == normalizza(decompressed):
 else:
     print("Differenze trovate anche dopo la normalizzazione.")
 
-print("Dizionario Alice (ultimi 10):", list(dict_alice.items())[-10:])
-print("Dizionario Bob (ultimi 10):", list(dict_bob.items())[-10:])
+print("Dizionario conversazione (ultimi 10):", list(dict_merged.items())[-10:])
 
 
-print("Numero voci dizionario Alice:", len(dict_alice))
-print("Numero voci dizionario Bob:", len(dict_bob))
+print("Numero voci dizionario conversazione:", len(dict_merged))
