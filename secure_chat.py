@@ -1,5 +1,32 @@
 import hashlib
+import secrets
 from lzw import lzw_compress, lzw_decompress, build_merged_dictionary
+
+
+DH_PRIME = int(
+    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E08"
+    "8A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B"
+    "302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9"
+    "A637ED6B0BFF5CB6F406B7EDCEE386BFB5A899FA5AE9F24117C4B1FE"
+    "649286651ECE65381FFFFFFFFFFFFFFFF",
+    16,
+)
+DH_GENERATOR = 2
+
+
+def generate_dh_key() -> str:
+    """Return a shared key obtained via a Diffie-Hellman exchange."""
+    p = DH_PRIME
+    g = DH_GENERATOR
+    a = secrets.randbelow(p - 2) + 1
+    b = secrets.randbelow(p - 2) + 1
+    A = pow(g, a, p)
+    B = pow(g, b, p)
+    shared_a = pow(B, a, p)
+    shared_b = pow(A, b, p)
+    assert shared_a == shared_b
+    # Hash the shared secret to obtain a fixed-size key
+    return hashlib.sha256(str(shared_a).encode("utf-8")).hexdigest()
 
 
 def _keystream(key: str, token_str: str) -> bytes:
@@ -49,7 +76,10 @@ def decrypt_message(encrypted_tokens, base_dict_rev: dict, key: str):
 if __name__ == "__main__":
     rev_dict, fwd_dict, _ = build_merged_dictionary()
 
-    secret_key = input("Inserisci la chiave segreta: ")
+    print("Generazione della chiave tramite Diffie-Hellman...")
+    secret_key = generate_dh_key()
+    print("Chiave condivisa ottenuta:\n", secret_key)
+
     msg = input("Inserisci il nuovo messaggio da cifrare: ")
 
     encrypted = encrypt_message(msg, fwd_dict, secret_key)
