@@ -88,13 +88,23 @@ def build_merged_dictionary(alice_txt="alice.txt", bob_txt="bob.txt"):
     fwd_dict = {v: k for k, v in rev_dict.items()}
     return rev_dict, fwd_dict, merged_file
 
-def lzw_decompress(compressed, initial_dict=None):
-    # Dizionario iniziale: tutti i singoli caratteri ASCII
-    dict_size = 256
-    dictionary = {i: chr(i) for i in range(dict_size)} if initial_dict is None else dict(initial_dict)
+def lzw_decompress(compressed, initial_dict=None, return_dict=False):
+    """Decompress a list of tokens using LZW.
+
+    If ``return_dict`` is True the final reverse dictionary used during
+    decompression is also returned so it can be reused to keep two peers
+    synchronized.
+    """
+    if initial_dict is None:
+        dict_size = 256
+        dictionary = {i: chr(i) for i in range(dict_size)}
+    else:
+        dictionary = dict(initial_dict)
+        dict_size = max(dictionary.keys()) + 1 if dictionary else 0
 
     result = []
-    w = chr(compressed[0])
+    first_code = compressed[0]
+    w = dictionary.get(first_code, chr(first_code))
     result.append(w)
 
     for k in compressed[1:]:
@@ -113,7 +123,10 @@ def lzw_decompress(compressed, initial_dict=None):
 
         w = entry
 
-    return "".join(result)
+    decoded = "".join(result)
+    if return_dict:
+        return decoded, dictionary
+    return decoded
 
 
 

@@ -35,21 +35,31 @@ def _keystream(key: str, token_str: str) -> bytes:
     return hashlib.sha256(data).digest()[:4]
 
 
-def encrypt_message(message: str, base_dict_fwd: dict, key: str):
-    """Compress and encrypt a message using a shared dictionary and key."""
-    tokens, final_dict = lzw_compress(message, initial_dict=base_dict_fwd)
+def encrypt_message(message: str, fwd_dict: dict, rev_dict: dict, key: str):
+    """Compress and encrypt a message updating the shared dictionary."""
+    tokens, final_rev = lzw_compress(message, initial_dict=fwd_dict)
+    delta = {code: s for code, s in final_rev.items() if code not in rev_dict}
+    rev_dict.update(delta)
+    fwd_dict.update({s: c for c, s in delta.items()})
+
     encrypted = []
     for t in tokens:
-        ks = _keystream(key, final_dict[t])
+        ks = _keystream(key, rev_dict[t])
         token_bytes = t.to_bytes(4, "big")
         enc = bytes(a ^ b for a, b in zip(token_bytes, ks))
         encrypted.append(enc.hex())
-    return encrypted
+    return encrypted, delta
 
 
-def decrypt_message(encrypted_tokens, base_dict_rev: dict, key: str):
-    """Decrypt and decompress tokens using the shared dictionary and key."""
-    dictionary = dict(base_dict_rev)
+def decrypt_message(encrypted_tokens, delta, rev_dict: dict, fwd_dict: dict, key: str):
+    """Decrypt tokens, update the dictionary and return the plaintext."""
+    # Save the dictionary state before receiving the new entries
+    base_before = dict(rev_dict)
+    # Add the delta so that tokens can be decrypted using the same keystream
+    rev_dict.update(delta)
+    fwd_dict.update({s: c for c, s in delta.items()})
+
+    dictionary = dict(rev_dict)
     dict_size = max(dictionary.keys()) + 1 if dictionary else 0
     decrypted_tokens = []
     w = None
@@ -70,19 +80,38 @@ def decrypt_message(encrypted_tokens, base_dict_rev: dict, key: str):
             dictionary[dict_size] = w + entry[0]
             dict_size += 1
         w = entry
-    return lzw_decompress(decrypted_tokens, initial_dict=base_dict_rev)
+
+    text, final_rev = lzw_decompress(decrypted_tokens, initial_dict=base_before, return_dict=True)
+    new_entries = {c: s for c, s in final_rev.items() if c not in rev_dict}
+    rev_dict.update(new_entries)
+    fwd_dict.update({s: c for c, s in new_entries.items()})
+    return text
 
 
 if __name__ == "__main__":
-    rev_dict, fwd_dict, _ = build_merged_dictionary()
+    # Build initial dictionary from the merged chat history
+    base_rev, base_fwd, _ = build_merged_dictionary()
+    # Alice and Bob start with the same dictionaries
+    alice_rev = dict(base_rev)
+    alice_fwd = dict(base_fwd)
+    bob_rev = dict(base_rev)
+    bob_fwd = dict(base_fwd)
 
     print("Generazione della chiave tramite Diffie-Hellman...")
     secret_key = generate_dh_key()
     print("Chiave condivisa ottenuta:\n", secret_key)
 
-    msg = input("Inserisci il nuovo messaggio da cifrare: ")
+    while True:
+        msg = input("Alice scrive (invio per terminare): ")
+        if not msg:
+            break
 
-    encrypted = encrypt_message(msg, fwd_dict, secret_key)
-    print("Token cifrati:", encrypted)
-    decrypted = decrypt_message(encrypted, rev_dict, secret_key)
-    print("Messaggio decifrato:", decrypted)
+        encrypted, delta = encrypt_message(msg, alice_fwd, alice_rev, secret_key)
+        print("Token cifrati:", encrypted)
+        print("Delta inviato:", delta)
+
+        plain = decrypt_message(encrypted, delta, bob_rev, bob_fwd, secret_key)
+        print("Bob riceve:", plain)
+        print("Dimensione dizionario aggiornata:", len(alice_rev))
+
+    print("Fine della comunicazione.")
