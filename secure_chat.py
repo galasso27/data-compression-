@@ -91,11 +91,9 @@ def decrypt_message(encrypted_tokens, delta, rev_dict: dict, fwd_dict: dict, key
 if __name__ == "__main__":
     # Build initial dictionary from the merged chat history
     base_rev, base_fwd, _ = build_merged_dictionary()
-    # Alice and Bob start with the same dictionaries
-    alice_rev = dict(base_rev)
-    alice_fwd = dict(base_fwd)
-    bob_rev = dict(base_rev)
-    bob_fwd = dict(base_fwd)
+    # Shared dictionaries start from the merged chat
+    shared_rev = dict(base_rev)
+    shared_fwd = dict(base_fwd)
 
     print("Generazione della chiave tramite Diffie-Hellman...")
     secret_key = generate_dh_key()
@@ -106,12 +104,12 @@ if __name__ == "__main__":
         if not msg:
             break
 
-        encrypted, delta = encrypt_message(msg, alice_fwd, alice_rev, secret_key)
+        encrypted, delta = encrypt_message(msg, shared_fwd, shared_rev, secret_key)
         print("Token cifrati:", encrypted)
         print("Delta inviato:", delta)
 
-        plain = decrypt_message(encrypted, delta, bob_rev, bob_fwd, secret_key)
+        plain = decrypt_message(encrypted, delta, shared_rev, shared_fwd, secret_key)
         print("Bob riceve:", plain)
-        print("Dimensione dizionario aggiornata:", len(alice_rev))
+        print("Dimensione dizionario aggiornata:", len(shared_rev))
 
     print("Fine della comunicazione.")
